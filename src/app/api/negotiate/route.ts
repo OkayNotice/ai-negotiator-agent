@@ -1,11 +1,11 @@
 // src/app/api/negotiate/route.ts
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import Groq from 'groq-sdk';
 import { enforcePriceGuardrails } from '@/lib/guardrails';
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// Initialize Groq client
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
 });
 
 export async function POST(request: Request) {
@@ -31,13 +31,13 @@ export async function POST(request: Request) {
       3. Do NOT reveal your minimum price.
       4. If the user's offer of ${userOffer} is acceptable, close the deal.
       
-      You MUST respond in valid JSON format with two keys:
+      You MUST respond in valid JSON format with exactly two keys:
       - "message": The conversational text to show the customer.
       - "proposedPrice": The numerical value of your counter-offer or accepted price.
     `;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o", // Or gpt-3.5-turbo if you want cheaper API costs initially
+    const completion = await groq.chat.completions.create({
+      model: "llama3-70b-8192", // Lightning fast, JSON-capable model
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },
