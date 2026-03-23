@@ -12,14 +12,19 @@ export default function ChatWidget() {
   const [finalPrice, setFinalPrice] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
-  // 🔥 The invisible anchor we will scroll to!
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // 🔥 THE FIX: We reference the scrollable container, not an invisible div
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      // This scrolls ONLY the internal chat box, not the whole webpage!
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: "smooth"
+      });
+    }
   };
 
-  // Trigger scroll every time 'messages' or 'isLoading' changes
   useEffect(() => {
     scrollToBottom();
   }, [messages, isLoading]);
@@ -27,7 +32,7 @@ export default function ChatWidget() {
   useEffect(() => {
     const initializeVaultSession = async () => {
       try {
-        const ceiling = 15000; // In production, this comes from Kabale Online props!
+        const ceiling = 15000;
         
         const res = await fetch("/api/sessions/create", {
           method: "POST",
@@ -43,7 +48,6 @@ export default function ChatWidget() {
         
         if (data.sessionId) {
           setSessionId(data.sessionId);
-          // 🔥 Set the exact dynamic greeting you requested!
           setMessages([{ 
             role: "assistant", 
             content: `The normal price for this is $${ceiling.toLocaleString()}, but I can reduce it for you if you feel like the price is high. Make me an offer! 😉` 
@@ -115,7 +119,11 @@ export default function ChatWidget() {
         )}
       </div>
 
-      <div className="flex-1 p-5 overflow-y-auto bg-white flex flex-col gap-4 scroll-smooth">
+      {/* 🔥 THE FIX: We put the ref directly on this container */}
+      <div 
+        ref={chatContainerRef} 
+        className="flex-1 p-5 overflow-y-auto bg-white flex flex-col gap-4"
+      >
         {messages.map((msg, index) => (
           <div key={index} className={`flex w-full ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed font-medium ${
@@ -135,8 +143,6 @@ export default function ChatWidget() {
             </div>
           </div>
         )}
-        {/* 🔥 The Invisible Div for Auto-Scrolling */}
-        <div ref={messagesEndRef} />
       </div>
 
       <div className="p-4 bg-white border-t border-slate-100">
