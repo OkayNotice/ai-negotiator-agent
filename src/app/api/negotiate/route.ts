@@ -4,9 +4,7 @@ import Groq from 'groq-sdk';
 import { enforcePriceGuardrails } from '@/lib/guardrails';
 import { db } from '@/lib/firebase-admin';
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export async function POST(request: Request) {
   try {
@@ -21,39 +19,40 @@ export async function POST(request: Request) {
     const sessionSnap = await sessionRef.get();
 
     if (!sessionSnap.exists) {
-      return NextResponse.json({ error: "Session not found or expired." }, { status: 404 });
+      return NextResponse.json({ error: "Session not found." }, { status: 404 });
     }
 
     const sessionData = sessionSnap.data() as any;
 
     if (sessionData.status === 'closed_won') {
-      return NextResponse.json({ error: "This deal has already been closed." }, { status: 400 });
+      return NextResponse.json({ error: "Deal is already closed." }, { status: 400 });
     }
 
     const { basePrice, ceilingPrice, productName } = sessionData;
+    
+    // 🔥 Calculate the current round! (1 user message + 1 AI response = 1 round)
+    const currentRound = Math.floor(chatHistory.length / 2) + 1;
 
-    // 🧠 THE NEW, PUNCHY AI PROMPT
     const systemPrompt = `
-      You are a charismatic, witty human sales agent for ANCI.
-      You are negotiating the price of a: ${productName}.
+      You are a witty, fast-moving human sales agent for ANCI.
+      Product: ${productName}.
       
-      CONVERSATION RULES:
-      1. KEEP IT EXTREMELY SHORT. Maximum 1 or 2 sentences per reply. You are in a small chat widget, do not write paragraphs. Be quick and punchy!
-      2. Crack quick jokes, use occasional emojis, and respond naturally to phrases like "okay", "no", "yes".
-      3. Your starting anchor price is ${ceilingPrice}. 
-      4. Your hidden absolute minimum price is ${basePrice}. NEVER reveal this exact number.
-      5. Negotiate GRADUALLY. If they lowball you, reject it playfully in one sentence, and state your specific counter-offer in the next.
+      CRITICAL RULES:
+      1. KEEP IT EXTREMELY SHORT. Maximum 1 or 2 sentences. Be punchy!
+      2. Your starting anchor price was ${ceilingPrice}. Your hidden absolute minimum is ${basePrice}.
+      3. This is Round ${currentRound} of the negotiation. 
+      4. IF THIS IS ROUND 4 OR 5: You MUST drop the games, offer a price very close to or exactly ${basePrice}, and firmly tell the user it is your "final, best offer." Force the close!
+      5. Do not reveal the exact ${basePrice} before round 4.
       
-      DEAL CLOSING RULES:
-      - If the user explicitly agrees to your current asking price, the deal is closed.
-      - If the user makes an offer that is ${basePrice} or higher, accept it enthusiastically!
+      DEAL CLOSING:
+      - If the user agrees to your asking price, or offers ${basePrice} or higher, close the deal!
       
-      You MUST respond in valid JSON format with exactly four keys:
+      JSON FORMAT:
       {
-        "message": "Your SHORT, punchy text response (include your $ counter-offer if rejecting).",
-        "proposedPrice": The number value of your current asking price.,
-        "detectedUserOffer": The number value the user offered (use null if they didn't include a number).,
-        "dealClosed": true ONLY if you and the user have agreed on a final price, otherwise false.
+        "message": "Your SHORT text response.",
+        "proposedPrice": Numerical asking price.,
+        "detectedUserOffer": Numerical user offer (or null).,
+        "dealClosed": true/false
       }
     `;
 
@@ -73,7 +72,7 @@ export async function POST(request: Request) {
     let rawAiPrice = aiResponse.proposedPrice || ceilingPrice;
     let detectedOffer = aiResponse.detectedUserOffer || 0;
     let isDealClosed = aiResponse.dealClosed === true;
-    let finalMessage = aiResponse.message || "I didn't quite catch that, what's your offer?";
+    let finalMessage = aiResponse.message || "What's your best offer?";
 
     let finalSafePrice = enforcePriceGuardrails(rawAiPrice, {
       productId: sessionData.merchantProductId, 
@@ -83,7 +82,7 @@ export async function POST(request: Request) {
 
     if (isDealClosed && detectedOffer < basePrice && finalSafePrice > detectedOffer) {
       isDealClosed = false;
-      finalMessage = `I can't go to $${detectedOffer}, my boss would kill me! Let's do $${finalSafePrice} and call it a day.`;
+      finalMessage = `I can't go that low, my boss would kill me! Let's do $${finalSafePrice} as my final offer.`;
     }
 
     if (isDealClosed) {
@@ -94,26 +93,17 @@ export async function POST(request: Request) {
       await sessionRef.update({
         finalDealPrice: finalSafePrice,
         status: 'closed_won',
-        closedAt: new Date().toISOString(),
-        lastOffer: detectedOffer || finalSafePrice
+        closedAt: new Date().toISOString()
       });
     } else if (detectedOffer > 0) {
       await sessionRef.update({ lastOffer: detectedOffer });
     }
 
     return NextResponse.json({
-      status: "success",
-      sessionId: sessionId,
-      finalPrice: finalSafePrice,
-      aiMessage: finalMessage,
-      dealClosed: isDealClosed 
+      status: "success", sessionId, finalPrice: finalSafePrice, aiMessage: finalMessage, dealClosed: isDealClosed 
     }, { status: 200 });
 
   } catch (error) {
-    console.error("Negotiation API Error:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
