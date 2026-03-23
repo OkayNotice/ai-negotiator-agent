@@ -13,10 +13,7 @@ export default function ChatWidget() {
   const [dealClosed, setDealClosed] = useState(false);
   const [finalPrice, setFinalPrice] = useState<number | null>(null);
   
-  // 🔥 The new Vault Tag
   const [sessionId, setSessionId] = useState<string | null>(null);
-
-  // Auto-scroll removed as requested!
 
   // 1. Simulate the Merchant's Backend creating a secure Vault Session on load
   useEffect(() => {
@@ -26,7 +23,7 @@ export default function ChatWidget() {
           method: "POST",
           headers: { 
             "Content-Type": "application/json",
-            "Authorization": "Bearer sk_test_12345" // Simulating your test merchant
+            "Authorization": "Bearer sk_test_12345" 
           },
           body: JSON.stringify({
             productName: "ANCI Enterprise License",
@@ -56,7 +53,6 @@ export default function ChatWidget() {
     setIsLoading(true);
 
     try {
-      // 2. Chat Widget talks to the AI using ONLY the Vault Tag! No API Key needed.
       const response = await fetch("/api/negotiate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -83,6 +79,24 @@ export default function ChatWidget() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // 🚀 THE HANDOFF: Tell the merchant's website to process the payment
+  const handleCheckoutHandoff = () => {
+    const checkoutData = {
+      action: "ANCI_DEAL_CLOSED",
+      payload: {
+        sessionId: sessionId,
+        productId: "demo_001",
+        finalPrice: finalPrice
+      }
+    };
+
+    // Broadcast the event to the parent window (the merchant's website)
+    window.parent.postMessage(checkoutData, "*");
+
+    // For testing purposes on your own site, we'll show an alert so you can see it working!
+    alert(`📢 Handoff Complete!\n\nThe widget just sent this data to the parent website:\nPrice: $${finalPrice}\nSession: ${sessionId}\n\nThe merchant's code will now add this to their cart!`);
   };
 
   return (
@@ -126,7 +140,7 @@ export default function ChatWidget() {
         )}
       </div>
 
-      {/* Input Area */}
+      {/* Input / Checkout Area */}
       <div className="p-4 bg-white border-t border-slate-100">
         {!dealClosed ? (
           <div className="relative flex items-center">
@@ -150,8 +164,12 @@ export default function ChatWidget() {
             </button>
           </div>
         ) : (
-          <button className="w-full bg-emerald-600 text-white py-3.5 rounded-xl text-sm font-bold shadow-sm hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2">
-            <span>Pay ${finalPrice?.toLocaleString()} Now</span>
+          <button 
+            onClick={handleCheckoutHandoff}
+            className="w-full bg-emerald-600 text-white py-3.5 rounded-xl text-sm font-bold shadow-sm hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <span>Proceed to Checkout (${finalPrice?.toLocaleString()})</span>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
           </button>
         )}
       </div>
