@@ -25,20 +25,18 @@ export default function ChatWidget() {
     }
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
-
-  useEffect(() => {
+    useEffect(() => {
     const initializeVaultSession = async () => {
       try {
+        // 🔥 We define the product name here so we can use it in the greeting!
+        const product = "ANCI Enterprise License"; 
         const ceiling = 15000;
         
         const res = await fetch("/api/sessions/create", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": "Bearer sk_test_12345" },
           body: JSON.stringify({
-            productName: "ANCI Enterprise License",
+            productName: product,
             merchantProductId: "demo_001",
             basePrice: 10000,
             ceilingPrice: ceiling
@@ -48,9 +46,10 @@ export default function ChatWidget() {
         
         if (data.sessionId) {
           setSessionId(data.sessionId);
+          // 🔥 The greeting now dynamically includes the product name!
           setMessages([{ 
             role: "assistant", 
-            content: `The normal price for this is $${ceiling.toLocaleString()}, but I can reduce it for you if you feel like the price is high. Make me an offer! 😉` 
+            content: `The normal price for the ${product} is $${ceiling.toLocaleString()}, but I can reduce it for you if you feel like the price is high. what do you think ? 😉` 
           }]);
         }
       } catch (error) {
@@ -59,6 +58,7 @@ export default function ChatWidget() {
     };
     initializeVaultSession();
   }, []);
+
 
   const handleSend = async () => {
     const userMessage = input.trim();
