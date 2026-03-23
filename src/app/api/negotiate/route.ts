@@ -28,13 +28,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Deal is already closed." }, { status: 400 });
     }
 
-    const { basePrice, ceilingPrice, productName } = sessionData;
+    // 🔥 Added default currency extraction here
+    const { basePrice, ceilingPrice, productName, currency = "UGX" } = sessionData;
     const currentRound = Math.floor(chatHistory.length / 2) + 1;
 
-    // 🔥 THE UPGRADED, NATURAL PROMPT
+    // 🔥 THE UPGRADED, NATURAL PROMPT (Now with Language & Currency Rules!)
     const systemPrompt = `
       You are a charismatic, natural, and friendly human sales agent for ANCI.
       Product: ${productName}.
+
+      🌍 LANGUAGE RULE (CRITICAL):
+      Detect the language the user is speaking and reply in that EXACT same language. If they speak Chinese, reply in Chinese. If they speak Swahili, reply in Swahili. 
+      
+      💰 CURRENCY RULES:
+      1. You are negotiating in ${currency}. 
+      2. NEVER use the "$" symbol. Always use "${currency}" (e.g., "${currency} 15,000").
+      3. Always quote prices in ${currency}, even if you are speaking to the user in a different language.
       
       CONVERSATION RULES:
       1. DO NOT META-COMMENTATE. Never classify the user out loud. Do not say things like "I see you are a serious buyer," "You drive a hard bargain," or "I sense you are hostile." Just talk to them like a normal human.
@@ -49,7 +58,7 @@ export async function POST(request: Request) {
       
       JSON FORMAT:
       {
-        "message": "Your creative, natural text response.",
+        "message": "Your creative, natural text response in the user's detected language.",
         "proposedPrice": Numerical asking price.,
         "detectedUserOffer": Numerical user offer (or null).,
         "dealClosed": true/false
@@ -68,7 +77,7 @@ export async function POST(request: Request) {
     });
 
     const aiResponse = JSON.parse(completion.choices[0].message?.content || "{}");
-    
+
     let rawAiPrice = aiResponse.proposedPrice || ceilingPrice;
     let detectedOffer = aiResponse.detectedUserOffer || 0;
     let isDealClosed = aiResponse.dealClosed === true;
@@ -80,16 +89,16 @@ export async function POST(request: Request) {
       ceilingPrice: ceilingPrice
     });
 
-    // Guardrail Check
+    // Guardrail Check (🔥 Updated to use dynamic currency and localized commas)
     if (isDealClosed && detectedOffer < basePrice && finalSafePrice > detectedOffer) {
       isDealClosed = false;
-      finalMessage = `I really wish I could do $${detectedOffer}, but I'd lose my job! Let's do $${finalSafePrice} as my final offer.`;
+      finalMessage = `I really wish I could do ${currency} ${detectedOffer.toLocaleString()}, but I'd lose my job! Let's do ${currency} ${finalSafePrice.toLocaleString()} as my final offer.`;
     }
 
-    // Success Check
+    // Success Check (🔥 Updated to use dynamic currency and localized commas)
     if (isDealClosed) {
       const winningPrice = (detectedOffer >= basePrice) ? detectedOffer : finalSafePrice;
-      finalMessage = `Deal! Let's get the ${productName} wrapped up at $${winningPrice}. 🤝`;
+      finalMessage = `Deal! Let's get the ${productName} wrapped up at ${currency} ${winningPrice.toLocaleString()}. 🤝`;
       finalSafePrice = winningPrice; 
 
       await sessionRef.update({
