@@ -1,17 +1,25 @@
+import ChatWidget from "@/components/ChatWidget";
+
 export default function Home() {
   return (
-    <main style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '800px', margin: '0 auto' }}>
-      <h1 style={{ color: '#10b981' }}>🟢 ANCI is Live</h1>
-      <p>The AI Negotiation Commerce Infrastructure foundation is deployed successfully.</p>
-      
-      <div style={{ marginTop: '2rem', padding: '1rem', border: '1px solid #ccc', borderRadius: '8px' }}>
-        <h2>System Status:</h2>
-        <ul>
-          <li><strong>Layer 1 (Frontend):</strong> Online</li>
-          <li><strong>Layer 2 (AI Engine):</strong> Awaiting deployment</li>
-          <li><strong>Layer 3 (Database):</strong> Awaiting deployment</li>
-        </ul>
+    <main className="min-h-screen bg-gray-100 p-6 font-sans">
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold text-emerald-600 mb-2">🟢 ANCI Storefront</h1>
+        <p className="text-gray-600 mb-8">Click below to negotiate the price of our premium software package.</p>
+        
+        {/* Product Card */}
+        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+          <h2 className="text-xl font-bold text-gray-800 mb-2">ANCI Enterprise License</h2>
+          <p className="text-gray-600 mb-4">Unlimited API calls, dedicated support, and advanced analytics.</p>
+          
+          <div className="bg-gray-100 inline-block px-3 py-1 rounded text-sm text-gray-500 font-medium mb-6">
+            Price: Hidden (Negotiable)
+          </div>
+
+          {/* Mount the Chat Widget here. We pass a mock product ID for now */}
+          <ChatWidget productId="prod_enterprise_001" />
+        </div>
       </div>
     </main>
-  )
+  );
 }
