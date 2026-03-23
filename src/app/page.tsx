@@ -50,7 +50,8 @@ export default function Home() {
           <div className="absolute -inset-1 bg-gradient-to-r from-slate-200 to-slate-100 rounded-2xl blur-lg opacity-50"></div>
           
           <div className="relative">
-            <ChatWidget productId="prod_enterprise_001" />
+            {/* 🔥 NOW LINKED TO YOUR FIREBASE PRODUCT ID 🔥 */}
+            <ChatWidget productId="prod_test_001" />
           </div>
         </div>
 
