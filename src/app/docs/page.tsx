@@ -44,9 +44,10 @@ const CodeBlock = ({ code, language }: { code: string; language: string }) => {
 };
 
 export default function Documentation() {
-  // A sample snippet to test the copy feature!
+  
+  // Snippet 1: Create Session
   const createSessionCode = `
-const response = await fetch("https://api.anci.com/v1/sessions/create", {
+const response = await fetch("https://api.anci.com/api/sessions/create", {
   method: "POST",
   headers: {
     "Authorization": "Bearer anci_live_YOUR_API_KEY",
@@ -61,11 +62,34 @@ const response = await fetch("https://api.anci.com/v1/sessions/create", {
 });
 
 const data = await response.json();
-console.log(data.sessionId); // Use this token in the frontend!
+console.log(data.sessionId); // Pass this token to your frontend widget!
+  `;
+
+  // Snippet 2: Checkout Handoff
+  const checkoutCode = `
+// Listen for events from the embedded ANCI Chat Widget
+window.addEventListener("message", (event) => {
+  // Ensure the message is from the trusted ANCI origin in production
+  // if (event.origin !== "https://your-anci-domain.com") return;
+
+  if (event.data?.action === "ANCI_DEAL_CLOSED") {
+    const payload = event.data.payload;
+    
+    console.log("Deal closed for session:", payload.sessionId);
+    console.log("Product ID:", payload.productId);
+    console.log("Final Negotiated Price: $", payload.finalPrice);
+
+    // TODO: Add the item to your Shopify/Custom cart at this specific price
+    // e.g., addToCart(payload.productId, payload.finalPrice);
+    
+    // Redirect to checkout
+    // window.location.href = "/checkout";
+  }
+});
   `;
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-emerald-100">
+    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-emerald-100 pb-24">
       
       {/* Top Navigation */}
       <nav className="w-full bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
@@ -95,14 +119,19 @@ console.log(data.sessionId); // Use this token in the frontend!
             <div>
               <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">Getting Started</h4>
               <ul className="space-y-2.5 text-sm font-medium text-slate-500">
-                <li><Link href="#overview" className="hover:text-emerald-600 transition-colors text-emerald-600">Overview</Link></li>
-                <li><Link href="#architecture" className="hover:text-emerald-600 transition-colors">The Architecture</Link></li>
+                <li><Link href="#overview" className="hover:text-emerald-600 transition-colors">Overview</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">API Reference</h4>
               <ul className="space-y-2.5 text-sm font-medium text-slate-500">
                 <li><Link href="#create-session" className="hover:text-emerald-600 transition-colors">POST /sessions/create</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">Integration</h4>
+              <ul className="space-y-2.5 text-sm font-medium text-slate-500">
+                <li><Link href="#checkout" className="hover:text-emerald-600 transition-colors">Checkout Handoff</Link></li>
               </ul>
             </div>
           </nav>
@@ -126,9 +155,12 @@ console.log(data.sessionId); // Use this token in the frontend!
             <p className="text-slate-600 leading-relaxed mb-4">
               ANCI is a Just-In-Time negotiation API. Instead of syncing your entire product database with our servers, your backend simply creates a secure "Vault Session" at the exact moment a user wants to negotiate.
             </p>
+            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-sm text-emerald-800 mb-6 font-medium">
+              <strong>Security Note:</strong> Your secret floor prices never touch the frontend browser. Only the random Session ID is exposed to the client.
+            </div>
           </section>
 
-          {/* Create Session Section (Now with Copyable Code!) */}
+          {/* Create Session Section */}
           <section id="create-session" className="mb-16">
             <h2 className="text-2xl font-bold text-slate-900 mb-4">Initialize a Vault Session</h2>
             <p className="text-slate-600 leading-relaxed mb-6">
@@ -140,9 +172,20 @@ console.log(data.sessionId); // Use this token in the frontend!
               <code className="text-slate-900 font-bold text-sm bg-slate-100 px-2 py-1 rounded border border-slate-200">/api/sessions/create</code>
             </div>
 
-            {/* 🔥 The Magic Copyable Block */}
             <CodeBlock code={createSessionCode} language="JavaScript (Node.js)" />
+          </section>
 
+          {/* Checkout Handoff Section */}
+          <section id="checkout" className="mb-16">
+            <h2 className="text-2xl font-bold text-slate-900 mb-4">The Checkout Handoff</h2>
+            <p className="text-slate-600 leading-relaxed mb-6">
+              ANCI is a negotiation engine, not a payment gateway. When the AI successfully closes a deal, the embedded widget broadcasts an <code className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded text-sm font-mono border border-slate-200">ANCI_DEAL_CLOSED</code> event via the browser's <code className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded text-sm font-mono border border-slate-200">postMessage</code> API.
+            </p>
+            <p className="text-slate-600 leading-relaxed mb-6">
+              Your frontend website needs to listen for this event, grab the final negotiated price, and update your cart (e.g., Shopify, Stripe, or custom backend) before routing the user to your checkout page.
+            </p>
+
+            <CodeBlock code={checkoutCode} language="JavaScript (Frontend)" />
           </section>
 
         </main>
