@@ -18,7 +18,6 @@ export async function POST(request: Request) {
     
     const apiKey = authHeader.split('Bearer ')[1];
 
-    // Look up the merchant by their API Key
     const merchantsSnapshot = await db.collection('merchants').where('apiKey', '==', apiKey).limit(1).get();
     
     if (merchantsSnapshot.empty) {
@@ -45,24 +44,24 @@ export async function POST(request: Request) {
 
     const dbProduct = productRef.data() as { basePrice: number, ceilingPrice: number, merchantId: string };
 
-    // Security Check: Does this product belong to the merchant who made the API call?
     if (dbProduct.merchantId !== merchantId) {
       return NextResponse.json({ error: "Product does not belong to this merchant." }, { status: 403 });
     }
 
-    // 🧠 4. THE AI BRAIN
+    // 🧠 4. THE AI BRAIN (STRICTER PROMPT)
     const systemPrompt = `
-      You are a strict but polite AI merchant for ANCI.
+      You are a strict, professional AI merchant for ANCI.
       Your goal is to get the highest price possible.
       
       CRITICAL RULES:
-      1. Your ABSOLUTE MINIMUM accepted price is ${dbProduct.basePrice}. 
-      2. If the user offers less than ${dbProduct.basePrice}, YOU MUST REJECT IT. Counter-offer higher.
-      3. NEVER reveal your minimum price.
-      4. If the user's offer is ${dbProduct.basePrice} or higher, you may accept it.
+      1. Your hidden absolute minimum price is ${dbProduct.basePrice}. NEVER say this exact number to the user unless they offer it first.
+      2. Your starting anchor/ceiling price is ${dbProduct.ceilingPrice}. 
+      3. If the user makes a very low offer, YOU MUST REJECT IT and explicitly state a specific numerical counter-offer in your message. DO NOT be vague. DO NOT say "I need a higher price". Say something like "I can't do that, but I can offer $14,000."
+      4. Always negotiate gradually down from your ceiling price. Do not drop to your minimum immediately.
+      5. If the user's offer is ${dbProduct.basePrice} or higher, you may accept it.
       
       Respond in valid JSON format with exactly two keys:
-      - "message": Your response to the customer.
+      - "message": Your text response to the customer (MUST INCLUDE your specific counter-offer number with a $ sign).
       - "proposedPrice": The number value of your counter-offer (or accepted price).
     `;
 
@@ -74,7 +73,7 @@ export async function POST(request: Request) {
         ...chatHistory,
         { role: "user", content: `I offer $${userOffer}.` }
       ],
-      temperature: 0.3,
+      temperature: 0.2, // 🔥 Lowered even more to enforce strict mathematical logic
     });
 
     const aiResponse = JSON.parse(completion.choices[0].message?.content || "{}");
@@ -89,10 +88,12 @@ export async function POST(request: Request) {
     
     let finalMessage = aiResponse.message;
 
-    // Mouth-to-Brain Check
-    if (rawAiPrice < dbProduct.basePrice) {
-      finalSafePrice = dbProduct.ceilingPrice - 1000;
-      finalMessage = `I appreciate the offer of $${userOffer}, but I simply cannot go that low. The best I can do right now is $${finalSafePrice}.`;
+    // 🔥 UPGRADED MOUTH-TO-BRAIN CHECK 🔥
+    // If the AI accidentally reveals the exact base price too early, or goes below it:
+    if (rawAiPrice <= dbProduct.basePrice && userOffer < dbProduct.basePrice) {
+      // Force the counter-offer to be halfway between their offer and the ceiling to prevent jumping to the floor
+      finalSafePrice = Math.floor((dbProduct.ceilingPrice + dbProduct.basePrice) / 2);
+      finalMessage = `I appreciate the offer of $${userOffer}, but I simply cannot go that low. I am willing to meet you at $${finalSafePrice}.`;
     }
 
     const isDealClosed = finalSafePrice <= userOffer;
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
       finalMessage = `We have a deal at $${userOffer}. Let's get this wrapped up!`;
       finalSafePrice = userOffer; 
       
-      // 💾 6. SAVE SESSION (Attached to the Merchant!)
+      // 💾 6. SAVE SESSION TO FIREBASE
       await db.collection('sessions').doc(sessionId).set({
         merchantId: merchantId,
         productId: productId,
