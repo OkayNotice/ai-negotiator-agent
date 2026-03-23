@@ -11,17 +11,16 @@ const groq = new Groq({
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { sessionId, userOffer, chatHistory = [] } = body;
+    // 1. CHANGED: We now accept the raw text string 'userMessage', not a strict number
+    const { sessionId, userMessage, chatHistory = [] } = body;
 
-    // We no longer need the API key here! The sessionId is our secure key.
-    if (!sessionId || userOffer === undefined) {
-      return NextResponse.json({ error: "Missing sessionId or userOffer." }, { status: 400 });
+    if (!sessionId || !userMessage) {
+      return NextResponse.json({ error: "Missing sessionId or userMessage." }, { status: 400 });
     }
 
-    // 🔍 1. FETCH THE SESSION VAULT FROM FIREBASE
     const sessionRef = db.collection('sessions').doc(sessionId);
     const sessionSnap = await sessionRef.get();
-    
+
     if (!sessionSnap.exists) {
       return NextResponse.json({ error: "Session not found or expired." }, { status: 404 });
     }
@@ -32,25 +31,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "This deal has already been closed." }, { status: 400 });
     }
 
-    // Extract the hidden prices and product name from the vault
     const { basePrice, ceilingPrice, productName } = sessionData;
 
-    // 🧠 2. THE AI BRAIN (Now dynamically aware of what it's selling!)
+    // 🧠 2. THE NEW, WITTY AI PROMPT
     const systemPrompt = `
-      You are a strict, professional AI merchant for ANCI.
+      You are a charismatic, witty, and highly persuasive human sales agent for ANCI.
       You are currently negotiating the price of a: ${productName}.
-      Your goal is to get the highest price possible for this product.
       
-      CRITICAL RULES:
-      1. Your hidden absolute minimum price is ${basePrice}. NEVER say this exact number to the user unless they offer it first.
-      2. Your starting anchor/ceiling price is ${ceilingPrice}. 
-      3. If the user makes a low offer, YOU MUST REJECT IT and explicitly state a specific numerical counter-offer in your message. DO NOT be vague. DO NOT say "I need a higher price". Say something like "I can't do that, but I can offer $14,000."
-      4. Always negotiate gradually down from your ceiling price. Do not drop to your minimum immediately.
-      5. If the user's offer is ${basePrice} or higher, you may accept it.
+      CONVERSATION RULES:
+      1. You are human! Use natural language, crack jokes, be empathetic, use occasional emojis, and respond naturally to phrases like "okay", "no", "yes", or "that's too expensive".
+      2. If the user is just chatting or complaining, chat back gently but steer them towards making an offer.
+      3. Your starting anchor price is ${ceilingPrice}. 
+      4. Your hidden absolute minimum price is ${basePrice}. NEVER reveal this exact number unless the user guesses it.
+      5. Negotiate GRADUALLY. If they lowball you, reject it playfully (e.g., "Haha my boss would fire me!"), and state a specific counter-offer.
       
-      Respond in valid JSON format with exactly two keys:
-      - "message": Your text response to the customer (MUST INCLUDE your specific counter-offer number with a $ sign if you are rejecting their offer).
-      - "proposedPrice": The number value of your counter-offer (or accepted price).
+      DEAL CLOSING RULES:
+      - If the user explicitly agrees to your current asking price, the deal is closed.
+      - If the user makes an offer that is ${basePrice} or higher, accept it enthusiastically!
+      
+      You MUST respond in valid JSON format with exactly four keys:
+      {
+        "message": "Your conversational text response (include your $ counter-offer if rejecting).",
+        "proposedPrice": The number value of your current asking price.,
+        "detectedUserOffer": The number value the user offered (use null if they didn't include a number).,
+        "dealClosed": true ONLY if you and the user have agreed on a final price, otherwise false.
+      }
     `;
 
     const completion = await groq.chat.completions.create({
@@ -59,45 +64,51 @@ export async function POST(request: Request) {
       messages: [
         { role: "system", content: systemPrompt },
         ...chatHistory,
-        { role: "user", content: `I offer $${userOffer}.` }
+        // Send their exact raw text to the brain!
+        { role: "user", content: userMessage } 
       ],
-      temperature: 0.2, 
+      // Slightly higher temperature (0.6) allows the AI to be more creative and funny
+      temperature: 0.6, 
     });
 
     const aiResponse = JSON.parse(completion.choices[0].message?.content || "{}");
-    const rawAiPrice = aiResponse.proposedPrice || ceilingPrice;
+    
+    let rawAiPrice = aiResponse.proposedPrice || ceilingPrice;
+    let detectedOffer = aiResponse.detectedUserOffer || 0;
+    let isDealClosed = aiResponse.dealClosed === true;
+    let finalMessage = aiResponse.message || "I didn't quite catch that, what's your offer?";
 
-    // 🛡️ 3. MATHEMATICAL GUARDRAILS
+    // 🛡️ 3. MATHEMATICAL GUARDRAILS (Protecting the bottom line)
     let finalSafePrice = enforcePriceGuardrails(rawAiPrice, {
       productId: sessionData.merchantProductId, 
       basePrice: basePrice,
       ceilingPrice: ceilingPrice
     });
-    
-    let finalMessage = aiResponse.message;
 
-    // 🔥 4. MOUTH-TO-BRAIN CHECK
-    if (rawAiPrice <= basePrice && userOffer < basePrice) {
-      finalSafePrice = Math.floor((ceilingPrice + basePrice) / 2);
-      finalMessage = `I appreciate the offer of $${userOffer}, but I simply cannot go that low for the ${productName}. I am willing to meet you at $${finalSafePrice}.`;
+    // 🔥 4. SECURITY CHECK: Did the AI hallucinate a bad deal?
+    if (isDealClosed && detectedOffer < basePrice && finalSafePrice > detectedOffer) {
+      // The AI tried to accept a deal below the floor price. Override it!
+      isDealClosed = false;
+      finalMessage = `I'd love to say yes to $${detectedOffer}, but my boss would actually lock me out of the building. How about we meet in the middle at $${finalSafePrice}?`;
     }
-
-    const isDealClosed = finalSafePrice <= userOffer;
 
     // 💾 5. UPDATE THE SESSION VAULT
     if (isDealClosed) {
-      finalMessage = `We have a deal at $${userOffer} for the ${productName}. Let's get this wrapped up!`;
-      finalSafePrice = userOffer; 
+      // If they offered higher than the floor, we take their offer! Otherwise we take the agreed safe price.
+      const winningPrice = (detectedOffer >= basePrice) ? detectedOffer : finalSafePrice;
       
+      finalMessage = `You know what? Deal! Let's get this ${productName} wrapped up at $${winningPrice}.`;
+      finalSafePrice = winningPrice; 
+
       await sessionRef.update({
         finalDealPrice: finalSafePrice,
         status: 'closed_won',
         closedAt: new Date().toISOString(),
-        lastOffer: userOffer
+        lastOffer: detectedOffer || finalSafePrice
       });
-    } else {
-      // Just update their last offer so the merchant can see it live in the database
-      await sessionRef.update({ lastOffer: userOffer });
+    } else if (detectedOffer > 0) {
+      // Just log their latest numerical offer
+      await sessionRef.update({ lastOffer: detectedOffer });
     }
 
     return NextResponse.json({
