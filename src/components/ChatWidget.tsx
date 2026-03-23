@@ -11,13 +11,14 @@ export default function ChatWidget() {
   const [dealClosed, setDealClosed] = useState(false);
   const [finalPrice, setFinalPrice] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  
+  // 🔥 ADDED: Dynamic currency state!
+  const [currency, setCurrency] = useState("UGX");
 
-  // 🔥 THE FIX: We reference the scrollable container, not an invisible div
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     if (chatContainerRef.current) {
-      // This scrolls ONLY the internal chat box, not the whole webpage!
       chatContainerRef.current.scrollTo({
         top: chatContainerRef.current.scrollHeight,
         behavior: "smooth"
@@ -25,31 +26,39 @@ export default function ChatWidget() {
     }
   };
 
-    useEffect(() => {
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isLoading]);
+
+  useEffect(() => {
     const initializeVaultSession = async () => {
       try {
-        // 🔥 We define the product name here so we can use it in the greeting!
-        const product = "ANCI Enterprise License"; 
-        const ceiling = 15000;
+        const product = "Dell XPS 15"; 
+        const ceiling = 5000000; 
+        const floor = 4200000;   
+        const activeCurrency = "UGX"; // 🔥 Define the currency for the demo
         
+        setCurrency(activeCurrency);
+
         const res = await fetch("/api/sessions/create", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": "Bearer sk_test_12345" },
           body: JSON.stringify({
             productName: product,
             merchantProductId: "demo_001",
-            basePrice: 10000,
-            ceilingPrice: ceiling
+            basePrice: floor,
+            ceilingPrice: ceiling,
+            currency: activeCurrency // 🔥 Pass the currency to the backend vault!
           })
         });
         const data = await res.json();
-        
+
         if (data.sessionId) {
           setSessionId(data.sessionId);
-          // 🔥 The greeting now dynamically includes the product name!
+          // 🔥 The greeting now dynamically includes the product name AND currency!
           setMessages([{ 
             role: "assistant", 
-            content: `The normal price for the ${product} is $${ceiling.toLocaleString()}, but I can reduce it for you if you feel like the price is high. what do you think ? 😉` 
+            content: `The normal price for the ${product} is ${activeCurrency} ${ceiling.toLocaleString()}, but I can reduce it for you if you feel like the price is high. What do you think? 😉` 
           }]);
         }
       } catch (error) {
@@ -58,7 +67,6 @@ export default function ChatWidget() {
     };
     initializeVaultSession();
   }, []);
-
 
   const handleSend = async () => {
     const userMessage = input.trim();
@@ -100,7 +108,8 @@ export default function ChatWidget() {
 
   const handleCheckoutHandoff = () => {
     window.parent.postMessage({ action: "ANCI_DEAL_CLOSED", payload: { sessionId, productId: "demo_001", finalPrice } }, "*");
-    alert(`📢 Handoff Complete!\n\nPrice: $${finalPrice}\n\nThe merchant's code will now add this to their cart!`);
+    // 🔥 Replaced hardcoded $ with dynamic currency in the alert
+    alert(`📢 Handoff Complete!\n\nPrice: ${currency} ${finalPrice}\n\nThe merchant's code will now add this to their cart!`);
   };
 
   return (
@@ -119,7 +128,6 @@ export default function ChatWidget() {
         )}
       </div>
 
-      {/* 🔥 THE FIX: We put the ref directly on this container */}
       <div 
         ref={chatContainerRef} 
         className="flex-1 p-5 overflow-y-auto bg-white flex flex-col gap-4"
@@ -170,7 +178,8 @@ export default function ChatWidget() {
             onClick={handleCheckoutHandoff}
             className="w-full bg-emerald-600 text-white py-3.5 rounded-xl text-sm font-bold shadow-sm hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
           >
-            <span>Proceed to Checkout (${finalPrice?.toLocaleString()})</span>
+            {/* 🔥 Replaced the $ with the dynamic currency */}
+            <span>Proceed to Checkout ({currency} {finalPrice?.toLocaleString()})</span>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
           </button>
         )}
