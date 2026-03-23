@@ -1,39 +1,54 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type Message = { role: "user" | "assistant"; content: string; };
 
 export default function ChatWidget() {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Hi there! I'm your AI merchant. What's your offer?" }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [dealClosed, setDealClosed] = useState(false);
   const [finalPrice, setFinalPrice] = useState<number | null>(null);
-
   const [sessionId, setSessionId] = useState<string | null>(null);
 
-  // 1. Simulate the Merchant's Backend creating a secure Vault Session on load
+  // 🔥 The invisible anchor we will scroll to!
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Trigger scroll every time 'messages' or 'isLoading' changes
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isLoading]);
+
   useEffect(() => {
     const initializeVaultSession = async () => {
       try {
+        const ceiling = 15000; // In production, this comes from Kabale Online props!
+        
         const res = await fetch("/api/sessions/create", {
           method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "Authorization": "Bearer sk_test_12345" 
-          },
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer sk_test_12345" },
           body: JSON.stringify({
             productName: "ANCI Enterprise License",
             merchantProductId: "demo_001",
             basePrice: 10000,
-            ceilingPrice: 15000
+            ceilingPrice: ceiling
           })
         });
         const data = await res.json();
-        if (data.sessionId) setSessionId(data.sessionId);
+        
+        if (data.sessionId) {
+          setSessionId(data.sessionId);
+          // 🔥 Set the exact dynamic greeting you requested!
+          setMessages([{ 
+            role: "assistant", 
+            content: `The normal price for this is $${ceiling.toLocaleString()}, but I can reduce it for you if you feel like the price is high. Make me an offer! 😉` 
+          }]);
+        }
       } catch (error) {
         console.error("Failed to initialize session vault.");
       }
@@ -42,11 +57,9 @@ export default function ChatWidget() {
   }, []);
 
   const handleSend = async () => {
-    // 🧠 UPDATE: We now grab the exact text the user typed
     const userMessage = input.trim();
     if (!userMessage || dealClosed || !sessionId) return;
 
-    // We add their raw message to the chat UI
     const newMessages: Message[] = [...messages, { role: "user", content: userMessage }];
     setMessages(newMessages);
     setInput("");
@@ -57,8 +70,8 @@ export default function ChatWidget() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId: sessionId, 
-          userMessage: userMessage, // 🧠 UPDATE: Send raw text instead of a strict number
+          sessionId, 
+          userMessage, 
           chatHistory: newMessages.slice(1).map(m => ({ role: m.role, content: m.content }))
         }),
       });
@@ -81,35 +94,20 @@ export default function ChatWidget() {
     }
   };
 
-  // 🚀 THE HANDOFF: Tell the merchant's website to process the payment
   const handleCheckoutHandoff = () => {
-    const checkoutData = {
-      action: "ANCI_DEAL_CLOSED",
-      payload: {
-        sessionId: sessionId,
-        productId: "demo_001",
-        finalPrice: finalPrice
-      }
-    };
-
-    // Broadcast the event to the parent window (the merchant's website)
-    window.parent.postMessage(checkoutData, "*");
-
-    // For testing purposes on your own site, we'll show an alert so you can see it working!
-    alert(`📢 Handoff Complete!\n\nThe widget just sent this data to the parent website:\nPrice: $${finalPrice}\nSession: ${sessionId}\n\nThe merchant's code will now add this to their cart!`);
+    window.parent.postMessage({ action: "ANCI_DEAL_CLOSED", payload: { sessionId, productId: "demo_001", finalPrice } }, "*");
+    alert(`📢 Handoff Complete!\n\nPrice: $${finalPrice}\n\nThe merchant's code will now add this to their cart!`);
   };
 
   return (
     <div className="w-full flex flex-col bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden h-[450px]">
-
-      {/* Header */}
       <div className="bg-slate-50 border-b border-slate-100 px-5 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></div>
           <h3 className="font-semibold text-slate-800 text-sm tracking-wide uppercase">Live Demo</h3>
         </div>
         {!sessionId ? (
-          <span className="text-xs text-amber-500 font-bold animate-pulse">Connecting Vault...</span>
+          <span className="text-xs text-amber-500 font-bold animate-pulse">Connecting...</span>
         ) : (
           <span className="text-xs text-slate-400 font-medium font-mono border px-2 py-0.5 rounded bg-white">
             {sessionId.substring(0, 10)}...
@@ -117,8 +115,7 @@ export default function ChatWidget() {
         )}
       </div>
 
-      {/* Chat Area */}
-      <div className="flex-1 p-5 overflow-y-auto bg-white flex flex-col gap-4">
+      <div className="flex-1 p-5 overflow-y-auto bg-white flex flex-col gap-4 scroll-smooth">
         {messages.map((msg, index) => (
           <div key={index} className={`flex w-full ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed font-medium ${
@@ -138,20 +135,19 @@ export default function ChatWidget() {
             </div>
           </div>
         )}
+        {/* 🔥 The Invisible Div for Auto-Scrolling */}
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Input / Checkout Area */}
       <div className="p-4 bg-white border-t border-slate-100">
         {!dealClosed ? (
           <div className="relative flex items-center">
-            {/* 🧠 UPDATE: Removed the hardcoded $ sign and updated the placeholder */}
             <input
               type="text"
-              inputMode="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Type an offer or message..."
+              placeholder="Type your offer..."
               className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 pr-12 text-sm text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
               disabled={isLoading || !sessionId}
             />
