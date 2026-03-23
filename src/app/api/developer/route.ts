@@ -19,7 +19,8 @@ export async function GET(request: Request) {
 // Generate a brand new API key
 export async function POST(request: Request) {
   try {
-    const { uid, email, companyName } = await request.json();
+    // 🔥 UPDATE 1: Extract defaultCurrency from the request body (defaults to UGX)
+    const { uid, email, companyName, defaultCurrency = "UGX" } = await request.json();
 
     if (!uid || !companyName) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
 
     const docRef = db.collection('merchants').doc(uid);
     const existing = await docRef.get();
-    
+
     if (existing.exists) {
       return NextResponse.json({ error: 'API Key already exists' }, { status: 400 });
     }
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
       uid,
       email,
       companyName,
+      defaultCurrency, // 🔥 UPDATE 2: Save it permanently to the database!
       apiKey,
       createdAt: new Date().toISOString(),
       apiCredits: 5000, 
