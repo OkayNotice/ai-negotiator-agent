@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { enforcePriceGuardrails } from '@/lib/guardrails';
 
-// Initialize Groq client
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
@@ -13,8 +12,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { productId, sessionId, userOffer, chatHistory = [] } = body;
 
-    // TODO: Later, we will fetch this from Firebase using the productId
-    // For now, we mock the database response to get the logic working:
     const mockDbProduct = {
       productId: productId,
       basePrice: 10000,   // Lowest acceptable price (hidden from user)
@@ -22,45 +19,59 @@ export async function POST(request: Request) {
     };
 
     const systemPrompt = `
-      You are the AI Negotiation Engine for ANCI. 
-      Your goal is to negotiate a price for a product. 
+      You are a strict but polite AI merchant for ANCI.
+      The user is trying to buy a product. Your goal is to get the highest price possible.
       
-      RULES:
-      1. You must be polite, persuasive, and act like a merchant.
-      2. The absolute minimum price you can accept is ${mockDbProduct.basePrice}. DO NOT accept anything below this.
-      3. Do NOT reveal your minimum price.
-      4. If the user's offer of ${userOffer} is acceptable, close the deal.
+      CRITICAL RULES:
+      1. Your ABSOLUTE MINIMUM accepted price is ${mockDbProduct.basePrice}. 
+      2. If the user offers less than ${mockDbProduct.basePrice}, YOU MUST REJECT IT. Counter-offer with a number higher than their offer.
+      3. NEVER reveal your minimum price.
+      4. If the user's offer is ${mockDbProduct.basePrice} or higher, you may accept it.
       
-      You MUST respond in valid JSON format with exactly two keys:
-      - "message": The conversational text to show the customer.
-      - "proposedPrice": The numerical value of your counter-offer or accepted price.
+      Respond in valid JSON format with exactly two keys:
+      - "message": Your response to the customer.
+      - "proposedPrice": The number value of your counter-offer (or accepted price).
     `;
 
     const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile", // 🔥 UPDATED TO GROQ'S NEWEST MODEL 🔥
+      model: "llama-3.3-70b-versatile", 
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },
         ...chatHistory,
-        { role: "user", content: `I will offer ${userOffer} for this.` }
+        { role: "user", content: `I offer $${userOffer}.` }
       ],
-      temperature: 0.7,
+      temperature: 0.3, // 🔥 Lowered from 0.7 to 0.3 to make the AI strict and logical
     });
 
-    // Parse the AI's JSON response
     const aiResponse = JSON.parse(completion.choices[0].message?.content || "{}");
     const rawAiPrice = aiResponse.proposedPrice || mockDbProduct.ceilingPrice;
 
     // Apply the mathematical shield
-    const finalSafePrice = enforcePriceGuardrails(rawAiPrice, mockDbProduct);
+    let finalSafePrice = enforcePriceGuardrails(rawAiPrice, mockDbProduct);
+    let finalMessage = aiResponse.message;
 
-    // Send the safe response back
+    // 🔥 THE MOUTH-TO-BRAIN ALIGNMENT CHECK 🔥
+    // If the AI tried to accept a price below our floor, we intercept and overwrite its message.
+    if (rawAiPrice < mockDbProduct.basePrice) {
+      finalSafePrice = mockDbProduct.ceilingPrice - 1000; // Counter-offer strictly
+      finalMessage = `I appreciate the offer of $${userOffer}, but I simply cannot go that low. The best I can do right now is $${finalSafePrice}.`;
+    }
+
+    // Determine if the deal is officially closed based on the user's actual offer
+    const isDealClosed = finalSafePrice <= userOffer;
+
+    if (isDealClosed) {
+      finalMessage = `We have a deal at $${userOffer}. Let's get this wrapped up!`;
+      finalSafePrice = userOffer; // Lock the checkout price to exactly what they offered
+    }
+
     return NextResponse.json({
       status: "success",
       sessionId: sessionId,
       finalPrice: finalSafePrice,
-      aiMessage: aiResponse.message,
-      dealClosed: finalSafePrice <= userOffer 
+      aiMessage: finalMessage,
+      dealClosed: isDealClosed 
     }, { status: 200 });
 
   } catch (error) {
