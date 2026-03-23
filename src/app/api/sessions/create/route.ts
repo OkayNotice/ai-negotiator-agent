@@ -10,21 +10,23 @@ export async function POST(request: Request) {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json({ error: "Unauthorized. Missing API Key." }, { status: 401 });
     }
-    
+
     const apiKey = authHeader.split('Bearer ')[1];
 
     const merchantsSnapshot = await db.collection('merchants').where('apiKey', '==', apiKey).limit(1).get();
-    
+
     if (merchantsSnapshot.empty) {
       return NextResponse.json({ error: "Invalid API Key." }, { status: 403 });
     }
 
     const merchant = merchantsSnapshot.docs[0];
     const merchantId = merchant.id;
+    const merchantData = merchant.data(); // 🔥 Grab the merchant's profile data
 
     // 📦 2. PARSE THE JUST-IN-TIME PRODUCT DATA
     const body = await request.json();
-    const { productName, basePrice, ceilingPrice, merchantProductId } = body;
+    // 🔥 We extract the currency if they sent one in the request!
+    const { productName, basePrice, ceilingPrice, merchantProductId, currency } = body;
 
     // Validate that they sent the math we need
     if (!productName || basePrice === undefined || ceilingPrice === undefined) {
@@ -35,23 +37,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Base price cannot be higher than ceiling price." }, { status: 400 });
     }
 
-    // 🔐 3. GENERATE A UNIQUE SESSION TAG (The "Vault ID")
+    // 🌍 3. THE CURRENCY DECISION ENGINE
+    // Use the requested currency, OR the merchant's default, OR fallback to UGX
+    const activeCurrency = currency || merchantData.defaultCurrency || "UGX";
+
+    // 🔐 4. GENERATE A UNIQUE SESSION TAG (The "Vault ID")
     const sessionId = `sess_${crypto.randomBytes(12).toString('hex')}`;
 
-    // 🗄️ 4. LOCK THE SECRET PRICES IN FIREBASE
+    // 🗄️ 5. LOCK THE SECRET PRICES IN FIREBASE
     await db.collection('sessions').doc(sessionId).set({
       merchantId: merchantId,
       merchantProductId: merchantProductId || "unknown",
       productName: productName,
       basePrice: Number(basePrice),
       ceilingPrice: Number(ceilingPrice),
+      currency: activeCurrency, // 🔥 Lock the currency into the vault!
       status: 'active',
       createdAt: new Date().toISOString(),
-      // We start with an empty chat history
       chatHistory: [] 
     });
 
-    // 🚀 5. RETURN THE TAG TO THE MERCHANT
+    // 🚀 6. RETURN THE TAG TO THE MERCHANT
     return NextResponse.json({
       status: "success",
       sessionId: sessionId,
