@@ -1,3 +1,4 @@
+// src/app/docs/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -37,8 +38,8 @@ const CodeBlock = ({ code, language }: { code: string; language: string }) => {
 export default function Documentation() {
 
   const createSessionCode = `
-// ⚠️ WARNING: This code must run on your BACKEND
-// Never run this in the browser.
+// ⚠️ WARNING: This code must run on your BACKEND (e.g. Node.js, Next.js API route, Python)
+// Never run this in the user's browser, or your API key will be stolen.
 
 const response = await fetch("https://your-anci-domain.com/api/sessions/create", {
   method: "POST",
@@ -49,8 +50,9 @@ const response = await fetch("https://your-anci-domain.com/api/sessions/create",
   body: JSON.stringify({
     productName: "MacBook Pro M3",
     merchantProductId: "sku_9982",
-    basePrice: 1200,   // Secret minimum
-    ceilingPrice: 1800 // Starting anchor
+    basePrice: 1200,   // Your secret absolute minimum acceptable price
+    ceilingPrice: 1800, // The initial asking price the AI will anchor to
+    currency: "USD"    // Optional: Defaults to your account setting if omitted
   })
 });
   `;
@@ -78,24 +80,27 @@ const response = await fetch("https://your-anci-domain.com/api/sessions/history?
   src="https://your-anci-domain.com/widget?sessionId=YOUR_GENERATED_SESSION_ID" 
   width="100%" 
   height="450px" 
-  style="border: none; border-radius: 16px;">
+  style="border: none; border-radius: 16px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
 </iframe>
   `;
 
   const checkoutCode = `
-// Listen for events emitted by the embedded iframe
+// Listen for events emitted by the embedded ANCI Chat Widget iframe
 window.addEventListener("message", (event) => {
+  // Security Best Practice: Verify the origin matches your ANCI domain
+  // if (event.origin !== "https://your-anci-domain.com") return;
+
   if (event.data?.action === "ANCI_DEAL_CLOSED") {
     const payload = event.data.payload;
     
     console.log("Session:", payload.sessionId);
     console.log("Product:", payload.productId);
-    console.log("Final Negotiated Price: $", payload.finalPrice);
+    console.log("Final Negotiated Price:", payload.finalPrice);
 
-    // TODO: Add the item to your shopping cart
+    // TODO: Add the item to your shopping cart using your platform's API
     // e.g., addToCart(payload.productId, payload.finalPrice);
     
-    // Redirect to checkout
+    // Redirect the user to checkout to finalize the payment
     // window.location.href = "/checkout";
   }
 });
@@ -121,22 +126,22 @@ window.addEventListener("message", (event) => {
   `;
 
   const endToEndCode = `
-// 1. User clicks "Negotiate Price"
+// 1. User clicks "Negotiate Price" on your product page
 async function handleNegotiateClick(product) {
   
-  // 2. Your backend creates the ANCI session securely
-  const sessionData = await fetch('/api/backend/create-anci-session', {
+  // 2. Your backend securely creates the ANCI session without exposing prices
+  const sessionData = await fetch('/api/your-internal-backend/create-anci-session', {
     method: 'POST', body: JSON.stringify(product)
   }).then(res => res.json());
 
-  // 3. Display the ANCI widget using the Session ID
+  // 3. You display the ANCI widget iframe using the returned Session ID
   openAnciModal(sessionData.sessionId);
 }
 
-// 4. Listen for the deal to close
+// 4. Listen for the deal to successfully close
 window.addEventListener("message", (event) => {
   if (event.data?.action === "ANCI_DEAL_CLOSED") {
-    // 5. Add item to cart & redirect
+    // 5. Add the item to the cart at the new, lower price & redirect to payment
     addToCart(event.data.payload.productId, event.data.payload.finalPrice);
     window.location.href = "/checkout";
   }
@@ -144,7 +149,7 @@ window.addEventListener("message", (event) => {
   `;
 
   return (
-    // 🔥 FIX: Added overflow-x-hidden to prevent global page scrolling
+    // 🔥 Added overflow-x-hidden to prevent global page scrolling on mobile devices
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-emerald-100 flex flex-col overflow-x-hidden w-full">
 
       <Header />
@@ -188,7 +193,7 @@ window.addEventListener("message", (event) => {
         </aside>
 
         {/* Main Content Area */}
-        {/* 🔥 FIX: Added min-w-0 to allow flexbox to shrink on mobile */}
+        {/* 🔥 min-w-0 allows the flexbox to shrink on mobile, fixing horizontal overflow bugs */}
         <main className="flex-1 min-w-0 px-6 py-12 md:px-12 max-w-4xl pb-32 w-full">
 
           <div className="mb-12">
@@ -254,7 +259,7 @@ window.addEventListener("message", (event) => {
             <p className="text-slate-600 leading-relaxed mb-4">
               Here is the complete conceptual workflow, from the moment a user clicks your negotiation button to the moment the order is ready for checkout.
             </p>
-            <CodeBlock code={endToEndCode} language="JavaScript (Conceptual)" />
+            <CodeBlock code={endToEndCode} language="JavaScript (Conceptual Flow)" />
           </section>
 
           <section id="create-session" className="mb-16 pt-8 border-t border-slate-200">
