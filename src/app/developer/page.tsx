@@ -14,6 +14,7 @@ export default function DeveloperPortal() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [defaultCurrency, setDefaultCurrency] = useState("UGX"); // 🔥 New Currency State
   const [merchantData, setMerchantData] = useState<any>(null);
   const [sessions, setSessions] = useState<any[]>([]);
 
@@ -59,7 +60,8 @@ export default function DeveloperPortal() {
       const res = await fetch("/api/developer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: user.uid, email: user.email, companyName }),
+        // 🔥 Now sending the defaultCurrency to Firebase!
+        body: JSON.stringify({ uid: user.uid, email: user.email, companyName, defaultCurrency }),
       });
       const data = await res.json();
       if (data.status === "success") {
@@ -96,9 +98,8 @@ export default function DeveloperPortal() {
         <Header />
         <main className="flex-1 flex items-center justify-center p-6">
           <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-slate-200 w-full max-w-md relative overflow-hidden">
-            {/* Decorative background element */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full blur-3xl -mr-10 -mt-10"></div>
-            
+
             <div className="text-center mb-8 relative z-10">
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-slate-900 text-white mb-4 shadow-md">
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
@@ -106,12 +107,12 @@ export default function DeveloperPortal() {
               <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Developer Portal</h1>
               <p className="text-slate-500 text-sm font-medium mt-2">Sign in to manage your API keys and view live negotiations.</p>
             </div>
-            
+
             <div className="space-y-4 relative z-10">
               <input className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-all" type="email" placeholder="Work Email" value={email} onChange={(e) => setEmail(e.target.value)} />
               <input className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-all" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
-            
+
             <div className="flex gap-3 mt-8 relative z-10">
               <button onClick={() => handleAuth(false)} className="flex-1 bg-slate-900 text-white py-3.5 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-800 transition-all">Log In</button>
               <button onClick={() => handleAuth(true)} className="flex-1 bg-white border border-slate-200 text-slate-900 py-3.5 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all">Sign Up</button>
@@ -131,8 +132,7 @@ export default function DeveloperPortal() {
       <Header />
 
       <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10">
-        
-        {/* Account Control Header */}
+
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10 pb-6 border-b border-slate-200">
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Command Center</h1>
@@ -152,11 +152,36 @@ export default function DeveloperPortal() {
             </div>
             <h2 className="text-2xl font-bold mb-3 text-slate-900 tracking-tight">Initialize your Workspace</h2>
             <p className="text-slate-500 text-sm mb-8 font-medium leading-relaxed max-w-md mx-auto">
-              Enter your organization or app name below to generate your production API key and unlock your 5,000 free negotiation credits.
+              Enter your organization name and primary currency below to generate your production API key and unlock your 5,000 free negotiation credits.
             </p>
             <div className="max-w-sm mx-auto">
-              <input className="w-full mb-4 px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-center" type="text" placeholder="e.g. Kabale Online" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
-              <button onClick={handleGenerateKey} disabled={!companyName.trim()} className="w-full bg-slate-900 text-white px-6 py-3.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 disabled:opacity-50 transition-all">
+              {/* 🔥 NEW: Input + Currency Dropdown side-by-side */}
+              <div className="flex gap-3 mb-4">
+                <input 
+                  className="flex-1 px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-center" 
+                  type="text" 
+                  placeholder="e.g. Kabale Online" 
+                  value={companyName} 
+                  onChange={(e) => setCompanyName(e.target.value)} 
+                />
+                <select 
+                  className="w-28 px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all appearance-none text-center cursor-pointer"
+                  value={defaultCurrency}
+                  onChange={(e) => setDefaultCurrency(e.target.value)}
+                >
+                  <option value="UGX">UGX</option>
+                  <option value="KSH">KSH</option>
+                  <option value="NGN">NGN</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="CNY">CNY</option>
+                </select>
+              </div>
+              <button 
+                onClick={handleGenerateKey} 
+                disabled={!companyName.trim()} 
+                className="w-full bg-slate-900 text-white px-6 py-3.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 disabled:opacity-50 transition-all"
+              >
                 Generate Production Key
               </button>
             </div>
@@ -187,7 +212,7 @@ export default function DeveloperPortal() {
 
             {/* API Keys & Metrics Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
+
               {/* Key Vault */}
               <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
                 <div className="flex justify-between items-start mb-6">
@@ -221,14 +246,14 @@ export default function DeveloperPortal() {
                 <div className="relative z-10">
                   <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{merchantData.companyName}</h2>
                   <p className="text-sm font-medium text-slate-300 mb-8">Active Organization</p>
-                  
+
                   <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Available Credits</h2>
                   <div className="flex items-baseline gap-2">
                     <p className="text-5xl font-extrabold text-white tracking-tight">{merchantData.apiCredits?.toLocaleString()}</p>
                     <span className="text-sm font-bold text-emerald-400">/ Sessions</span>
                   </div>
                 </div>
-                
+
                 <button onClick={() => alert('Billing portal integration coming next!')} className="w-full mt-8 bg-white/10 hover:bg-white/20 border border-white/10 text-white py-2.5 rounded-xl text-sm font-bold transition-all backdrop-blur-sm relative z-10">
                   Add Credits
                 </button>
@@ -284,9 +309,10 @@ export default function DeveloperPortal() {
                               </span>
                             )}
                           </td>
-                          <td className="px-8 py-5 text-sm text-slate-500 font-mono">${session.basePrice?.toLocaleString()}</td>
+                          {/* 🔥 Table now dynamically uses session.currency! */}
+                          <td className="px-8 py-5 text-sm text-slate-500 font-mono">{session.currency || 'UGX'} {(session.basePrice || 0).toLocaleString()}</td>
                           <td className="px-8 py-5 text-sm font-bold text-emerald-600 font-mono bg-emerald-50/30 group-hover:bg-emerald-50/50 transition-colors">
-                            ${(session.finalDealPrice || session.lastOffer || 0).toLocaleString()}
+                            {session.currency || 'UGX'} {(session.finalDealPrice || session.lastOffer || 0).toLocaleString()}
                           </td>
                           <td className="px-8 py-5 text-sm text-slate-500 font-medium text-right">
                             {new Date(session.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}
