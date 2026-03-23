@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     `;
 
     const completion = await groq.chat.completions.create({
-      model: "llama3-70b-8192", // Lightning fast, JSON-capable model
+      model: "llama-3.3-70b-versatile", // 🔥 UPDATED TO GROQ'S NEWEST MODEL 🔥
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },
