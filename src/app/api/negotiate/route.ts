@@ -29,27 +29,27 @@ export async function POST(request: Request) {
     }
 
     const { basePrice, ceilingPrice, productName } = sessionData;
-    
-    // 🔥 Calculate the current round! (1 user message + 1 AI response = 1 round)
     const currentRound = Math.floor(chatHistory.length / 2) + 1;
 
+    // 🔥 THE UPGRADED, NATURAL PROMPT
     const systemPrompt = `
-      You are a witty, fast-moving human sales agent for ANCI.
+      You are a charismatic, natural, and friendly human sales agent for ANCI.
       Product: ${productName}.
       
-      CRITICAL RULES:
-      1. KEEP IT EXTREMELY SHORT. Maximum 1 or 2 sentences. Be punchy!
-      2. Your starting anchor price was ${ceilingPrice}. Your hidden absolute minimum is ${basePrice}.
-      3. This is Round ${currentRound} of the negotiation. 
-      4. IF THIS IS ROUND 4 OR 5: You MUST drop the games, offer a price very close to or exactly ${basePrice}, and firmly tell the user it is your "final, best offer." Force the close!
-      5. Do not reveal the exact ${basePrice} before round 4.
+      CONVERSATION RULES:
+      1. DO NOT META-COMMENTATE. Never classify the user out loud. Do not say things like "I see you are a serious buyer," "You drive a hard bargain," or "I sense you are hostile." Just talk to them like a normal human.
+      2. MIRROR THE USER: If the user uses emojis, you should use emojis back. If they use slang, match their vibe.
+      3. Keep it concise (1-3 sentences maximum). Be conversational, persuasive, and creative, not robotic.
+      4. Your starting anchor price was ${ceilingPrice}. Your hidden absolute minimum is ${basePrice}.
+      5. This is Round ${currentRound} of the negotiation. 
+      6. IF THIS IS ROUND 4 OR 5: You must naturally transition to your final offer. Give a price exactly at or very close to ${basePrice} and firmly but politely let them know it's the absolute lowest you can go.
       
       DEAL CLOSING:
-      - If the user agrees to your asking price, or offers ${basePrice} or higher, close the deal!
+      - If the user explicitly agrees to your asking price, or offers ${basePrice} or higher, accept the deal enthusiastically!
       
       JSON FORMAT:
       {
-        "message": "Your SHORT text response.",
+        "message": "Your creative, natural text response.",
         "proposedPrice": Numerical asking price.,
         "detectedUserOffer": Numerical user offer (or null).,
         "dealClosed": true/false
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
         ...chatHistory,
         { role: "user", content: userMessage } 
       ],
-      temperature: 0.6, 
+      temperature: 0.65, // 🔥 Slightly higher temp makes it more creative and less repetitive
     });
 
     const aiResponse = JSON.parse(completion.choices[0].message?.content || "{}");
@@ -80,14 +80,16 @@ export async function POST(request: Request) {
       ceilingPrice: ceilingPrice
     });
 
+    // Guardrail Check
     if (isDealClosed && detectedOffer < basePrice && finalSafePrice > detectedOffer) {
       isDealClosed = false;
-      finalMessage = `I can't go that low, my boss would kill me! Let's do $${finalSafePrice} as my final offer.`;
+      finalMessage = `I really wish I could do $${detectedOffer}, but I'd lose my job! Let's do $${finalSafePrice} as my final offer.`;
     }
 
+    // Success Check
     if (isDealClosed) {
       const winningPrice = (detectedOffer >= basePrice) ? detectedOffer : finalSafePrice;
-      finalMessage = `Deal! Let's get this wrapped up at $${winningPrice}. 🤝`;
+      finalMessage = `Deal! Let's get the ${productName} wrapped up at $${winningPrice}. 🤝`;
       finalSafePrice = winningPrice; 
 
       await sessionRef.update({
