@@ -1,3 +1,5 @@
+import "./globals.css";
+
 export const metadata = {
   title: 'ANCI Platform',
   description: 'AI Negotiation Commerce Infrastructure',
@@ -10,7 +12,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body style={{ margin: 0, padding: 0, boxSizing: 'border-box' }}>
+      <body className="antialiased bg-slate-50">
         {children}
       </body>
     </html>
