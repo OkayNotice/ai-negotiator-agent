@@ -40,10 +40,14 @@ export default function ChatWidget({ productId }: { productId: string }) {
     try {
       const response = await fetch("/api/negotiate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          // 🔥 SAAS LAYER: Sending the external merchant API key!
+          "Authorization": "Bearer sk_test_12345" 
+        },
         body: JSON.stringify({
-          productId: productId,
-          sessionId: "session-123", 
+          productId: productId, 
+          sessionId: "session-123", // In a real app, you would generate a random UUID here
           userOffer: userOffer,
           chatHistory: newMessages.slice(1).map(m => ({ role: m.role, content: m.content }))
         }),
@@ -52,7 +56,9 @@ export default function ChatWidget({ productId }: { productId: string }) {
       const data = await response.json();
 
       if (data.error) {
-        setMessages((prev) => [...prev, { role: "assistant", content: "Connection interrupted. Let's try that again." }]);
+        // If the API key is wrong or the product doesn't belong to the merchant, we show it here
+        console.error("API Error:", data.error);
+        setMessages((prev) => [...prev, { role: "assistant", content: `Authentication Error: ${data.error}` }]);
       } else {
         setMessages((prev) => [...prev, { role: "assistant", content: data.aiMessage }]);
         if (data.dealClosed) {
@@ -61,6 +67,7 @@ export default function ChatWidget({ productId }: { productId: string }) {
         }
       }
     } catch (error) {
+      console.error("Network Error:", error);
       setMessages((prev) => [...prev, { role: "assistant", content: "Network error. Please check your connection." }]);
     } finally {
       setIsLoading(false);
