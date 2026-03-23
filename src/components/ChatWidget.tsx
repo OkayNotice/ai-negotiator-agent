@@ -12,7 +12,7 @@ export default function ChatWidget() {
   const [isLoading, setIsLoading] = useState(false);
   const [dealClosed, setDealClosed] = useState(false);
   const [finalPrice, setFinalPrice] = useState<number | null>(null);
-  
+
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   // 1. Simulate the Merchant's Backend creating a secure Vault Session on load
@@ -42,12 +42,12 @@ export default function ChatWidget() {
   }, []);
 
   const handleSend = async () => {
-    if (!input.trim() || dealClosed || !sessionId) return;
+    // 🧠 UPDATE: We now grab the exact text the user typed
+    const userMessage = input.trim();
+    if (!userMessage || dealClosed || !sessionId) return;
 
-    const userOffer = parseFloat(input.replace(/[^0-9.]/g, ''));
-    if (isNaN(userOffer)) return;
-
-    const newMessages: Message[] = [...messages, { role: "user", content: `$${userOffer.toLocaleString()}` }];
+    // We add their raw message to the chat UI
+    const newMessages: Message[] = [...messages, { role: "user", content: userMessage }];
     setMessages(newMessages);
     setInput("");
     setIsLoading(true);
@@ -58,7 +58,7 @@ export default function ChatWidget() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId: sessionId, 
-          userOffer: userOffer,
+          userMessage: userMessage, // 🧠 UPDATE: Send raw text instead of a strict number
           chatHistory: newMessages.slice(1).map(m => ({ role: m.role, content: m.content }))
         }),
       });
@@ -101,7 +101,7 @@ export default function ChatWidget() {
 
   return (
     <div className="w-full flex flex-col bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden h-[450px]">
-      
+
       {/* Header */}
       <div className="bg-slate-50 border-b border-slate-100 px-5 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -128,7 +128,7 @@ export default function ChatWidget() {
             </div>
           </div>
         ))}
-        
+
         {isLoading && (
           <div className="flex w-full justify-start">
             <div className="bg-slate-100 px-4 py-3 rounded-2xl rounded-bl-sm flex gap-1 items-center">
@@ -144,15 +144,15 @@ export default function ChatWidget() {
       <div className="p-4 bg-white border-t border-slate-100">
         {!dealClosed ? (
           <div className="relative flex items-center">
-            <span className="absolute left-4 text-slate-400 font-bold">$</span>
+            {/* 🧠 UPDATE: Removed the hardcoded $ sign and updated the placeholder */}
             <input
               type="text"
-              inputMode="decimal"
+              inputMode="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Make an offer..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-8 pr-12 text-sm text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+              placeholder="Type an offer or message..."
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 pr-12 text-sm text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
               disabled={isLoading || !sessionId}
             />
             <button
